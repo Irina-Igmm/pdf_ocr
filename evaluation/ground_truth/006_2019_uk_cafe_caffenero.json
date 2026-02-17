@@ -1,0 +1,20 @@
+{
+  "pdf_path": "data/archive/2019/uk/cafe/caffenero_20190831.pdf",
+  "ground_truth": {
+    "ServiceProvider": {
+      "Name": "Caffe Nero",
+      "Address": "782 Edinburgh Airport Gate 12",
+      "VATNumber": "795871659"
+    },
+    "TransactionDetails": {
+      "Items": [
+        {"Item": "Salted Caramel Cheesecake", "Quantity": 1, "Price": 2.95},
+        {"Item": "Chai Latte", "Quantity": 1, "Price": 3.30},
+        {"Item": "Latte Grande", "Quantity": 1, "Price": 3.05}
+      ],
+      "Currency": "GBP",
+      "TotalAmount": 9.30,
+      "VAT": "20%"
+    }
+  }
+}

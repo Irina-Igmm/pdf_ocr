@@ -1,0 +1,21 @@
+{
+  "pdf_path": "data/archive/2018/us/hotel/venetian_434280912998.pdf",
+  "ground_truth": {
+    "ServiceProvider": {
+      "Name": "The Venetian / The Palazzo",
+      "Address": "3355 Las Vegas Blvd. So., Las Vegas, NV 89109",
+      "VATNumber": null
+    },
+    "TransactionDetails": {
+      "Items": [
+        {"Item": "Resort Fee", "Quantity": 7, "Price": 22.68},
+        {"Item": "Room Charge Upgrade VEN", "Quantity": 7, "Price": 51.02},
+        {"Item": "Room Charge VE33310", "Quantity": 7, "Price": 209.00},
+        {"Item": "TAX2", "Quantity": 7, "Price": 27.96}
+      ],
+      "Currency": "USD",
+      "TotalAmount": 2174.62,
+      "VAT": "195.72 (Total of TAX2 line items)"
+    }
+  }
+}

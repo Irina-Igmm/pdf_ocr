@@ -1,0 +1,28 @@
+data/
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Claude
+.claude/*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Ollama model cache
+ollama_data/

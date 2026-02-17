@@ -1,0 +1,19 @@
+{
+  "pdf_path": "data/archive/2018/ca/restaurant/cafecrepe_20180908_008.pdf",
+  "ground_truth": {
+    "ServiceProvider": {
+      "Name": "Cafe Crepe",
+      "Address": "1032 Robson Ave.",
+      "VATNumber": null
+    },
+    "TransactionDetails": {
+      "Items": [
+        {"Item": "Strawberry and Banana", "Quantity": 1, "Price": 10.00},
+        {"Item": "Add Nutella", "Quantity": 1, "Price": 2.50}
+      ],
+      "Currency": "CAD",
+      "TotalAmount": 13.13,
+      "VAT": null
+    }
+  }
+}

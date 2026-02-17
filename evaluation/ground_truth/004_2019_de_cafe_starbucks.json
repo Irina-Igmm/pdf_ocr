@@ -1,0 +1,19 @@
+{
+  "pdf_path": "data/archive/2019/de/cafe/starbucks-20190102.pdf",
+  "ground_truth": {
+    "ServiceProvider": {
+      "Name": "Starbucks Coffee",
+      "Address": "Grimmaische Strasse 14, 4109 Leipzig",
+      "VATNumber": null
+    },
+    "TransactionDetails": {
+      "Items": [
+        {"Item": "CaffeLatte", "Quantity": 1, "Price": 4.29},
+        {"Item": "CaffeMocha", "Quantity": 1, "Price": 4.99}
+      ],
+      "Currency": "EUR",
+      "TotalAmount": 9.28,
+      "VAT": "19%"
+    }
+  }
+}

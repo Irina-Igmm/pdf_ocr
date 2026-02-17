@@ -1,0 +1,18 @@
+{
+  "pdf_path": "data/archive/2024/fr/bioburger_20240327_004.pdf",
+  "ground_truth": {
+    "ServiceProvider": {
+      "Name": "Bioburger",
+      "Address": "Paris Montparnasse",
+      "VATNumber": null
+    },
+    "TransactionDetails": {
+      "Items": [
+        {"Item": "Le Bacon Cheese", "Quantity": 1, "Price": 22.40}
+      ],
+      "Currency": "EUR",
+      "TotalAmount": 22.40,
+      "VAT": "10.00% & 20.00% (Total tax: 2.43 €) [cite: 44]"
+    }
+  }
+}

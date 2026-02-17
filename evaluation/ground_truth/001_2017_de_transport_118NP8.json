@@ -1,0 +1,19 @@
+{
+  "pdf_path": "data/archive/2017/de/public transport/118NP8.pdf",
+  "ground_truth": {
+    "ServiceProvider": {
+      "Name": "DB Fernverkehr AG",
+      "Address": "Stephensonstr. 1, 60326 Frankfurt",
+      "VATNumber": null
+    },
+    "TransactionDetails": {
+      "Items": [
+        {"Item": "IC/EC Fahrkarte", "Quantity": 1, "Price": 78.00},
+        {"Item": "Zahlungsmittelentgelt", "Quantity": 1, "Price": 0.75}
+      ],
+      "Currency": "EUR",
+      "TotalAmount": 78.75,
+      "VAT": "19%"
+    }
+  }
+}

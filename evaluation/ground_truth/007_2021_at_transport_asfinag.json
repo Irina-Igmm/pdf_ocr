@@ -1,0 +1,18 @@
+{
+  "pdf_path": "data/archive/2021/at/20210906_001.pdf",
+  "ground_truth": {
+    "ServiceProvider": {
+      "Name": "ASFINAG",
+      "Address": "Rotenturmstr. 5-9, 1010 Wien",
+      "VATNumber": "ATU 43143200"
+    },
+    "TransactionDetails": {
+      "Items": [
+        {"Item": "Maut Kategorie 1/PKW bis 3,5t", "Quantity": 1, "Price": 12.50}
+      ],
+      "Currency": "EUR",
+      "TotalAmount": 12.50,
+      "VAT": "20%"
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "pdf_path": "data/archive/2018/ca/hotel/20181024_008.pdf",
+  "ground_truth": {
+    "ServiceProvider": {
+      "Name": "Marriott Montreal Chateau Champlain",
+      "Address": "1, Place du Canada, Montreal, QC H3B 4C9 Canada",
+      "VATNumber": "1225509863 TQ0001"
+    },
+    "TransactionDetails": {
+      "Items": [
+        {"Item": "CHAM/RM", "Quantity": 7, "Price": 225.00},
+        {"Item": "TPS/GST", "Quantity": 7, "Price": 11.64},
+        {"Item": "TVQ/PST", "Quantity": 7, "Price": 23.23},
+        {"Item": "TX HB/RM", "Quantity": 7, "Price": 7.88}
+      ],
+      "Currency": "CAD",
+      "TotalAmount": 1606.50,
+      "VAT": "209.22"
+    }
+  }
+}

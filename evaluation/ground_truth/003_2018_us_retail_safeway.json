@@ -1,0 +1,20 @@
+{
+  "pdf_path": "data/archive/2018/us/retail/safeway-3208524524.pdf",
+  "ground_truth": {
+    "ServiceProvider": {
+      "Name": "Safeway",
+      "Address": "298 King St., San Francisco CA 94107",
+      "VATNumber": null
+    },
+    "TransactionDetails": {
+      "Items": [
+        {"Item": "BLBRY B MNSTR", "Quantity": 1, "Price": 2.99},
+        {"Item": "CRV PROD SNGL NTX", "Quantity": 1, "Price": 0.05},
+        {"Item": "CLASSIC ITALIAN SA", "Quantity": 1, "Price": 5.99}
+      ],
+      "Currency": "USD",
+      "TotalAmount": 9.03,
+      "VAT": null
+    }
+  }
+}
