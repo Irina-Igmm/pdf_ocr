@@ -1,6 +1,6 @@
 # Receipt OCR API
 
-API-based OCR system for extracting structured information from scanned PDF receipts, built with **FastAPI** and powered by **Google Gemini 2.0 Flash**.
+API-based OCR system for extracting structured information from scanned PDF receipts, built with **FastAPI** and powered by **Ollama (qwen2.5)**.
 
 ---
 
@@ -30,12 +30,13 @@ API-based OCR system for extracting structured information from scanned PDF rece
 
 ## Overview
 
-This system provides a single REST endpoint (`POST /process_pdf`) that accepts a PDF receipt and returns structured JSON containing:
+This system provides REST endpoints (`POST /process_pdf` and `POST /process_batch`) that accept PDF receipts and return structured JSON containing:
 
 - **Service Provider**: Name, Address, VAT Number
 - **Transaction Details**: Items list (name, quantity, price), Currency, Total Amount, VAT
 
-Five parsing strategies are available, allowing comparison between different pipelines.
+Four parsing strategies are available, allowing comparison between different pipelines.
+All LLM inference runs **locally** via Ollama (qwen2.5) — no cloud API needed.
 
 ---
 
@@ -44,28 +45,25 @@ Five parsing strategies are available, allowing comparison between different pip
 ```
 PDF Upload
     │
-    ├── [gemini]  ──► PyMuPDF (PDF → images) ──► Gemini 2.0 Flash (multimodal) ──► JSON
+    ├── [gemini]  ──► PyMuPDF (PDF → images) ──► EasyOCR ──► Ollama (qwen2.5) ──► JSON
     │
-    ├── [llm]     ──► PyMuPDF (PDF → images) ──► EasyOCR ──► Gemini 2.0 Flash (text) ──► JSON
+    ├── [llm]     ──► PyMuPDF (PDF → images) ──► EasyOCR ──► Ollama (qwen2.5) ──► JSON
     │
-    ├── [hybrid]  ──► pdfplumber (native text) + EasyOCR (image OCR) ──► Gemini 2.0 Flash ──► JSON
+    ├── [hybrid]  ──► pdfplumber (native text) + EasyOCR (image OCR) ──► Ollama (qwen2.5) ──► JSON
     │
-    ├── [native]  ──► pdfplumber (native text) ──► Gemini 2.0 Flash (text) ──► JSON
-    │
-    └── [regex]   ──► PyMuPDF (PDF → images) ──► EasyOCR ──► Regex heuristics ──► JSON
+    └── [regex]   ──► PyMuPZ (PDF → images) ──► EasyOCR ──► Regex heuristics ──► JSON
 ```
 
 ---
 
 ## Parsing Strategies
 
-| Strategy | Pipeline | Best For | Requires API |
+| Strategy | Pipeline | Best For | Requires LLM |
 |----------|----------|----------|:------------:|
-| **`gemini`** (default) | Image → Gemini 2.0 Flash | Scanned receipts, best accuracy | ✅ |
-| **`llm`** | EasyOCR → text → Gemini | Comparing OCR+LLM vs vision | ✅ |
-| **`hybrid`** | pdfplumber + EasyOCR → merged text → Gemini | Mixed PDFs (some native, some scanned) | ✅ |
-| **`native`** | pdfplumber → text → Gemini | Digital/native PDFs with embedded text | ✅ |
-| **`regex`** | EasyOCR → text → regex | Fast, no API key needed, limited accuracy | ❌ |
+| **`hybrid`** (default) | pdfplumber + EasyOCR → merged text → Ollama | Mixed PDFs (native + scanned), best accuracy | ✅ |
+| **`gemini`** | EasyOCR → text → Ollama | Scanned receipts (legacy name) | ✅ |
+| **`llm`** | EasyOCR → text → Ollama | Comparing OCR+LLM pipelines | ✅ |
+| **`regex`** | EasyOCR → text → regex | Fast, no LLM needed, limited accuracy | ❌ |
 
 ---
 
@@ -74,22 +72,22 @@ PDF Upload
 ### Prerequisites
 
 - **Python 3.12+**
-- **Google Gemini API key** — get one at [Google AI Studio](https://aistudio.google.com/apikey)
-- **Docker** (optional, for containerized deployment)
+- **Ollama** — install from [ollama.com](https://ollama.com) and pull the model: `ollama pull qwen2.5:latest`
+- **Docker** (optional, for containerized deployment — Ollama included in docker-compose)
 
 ### Environment Variables
 
 Create a `.env` file at the project root:
 
 ```env
-GEMINI_API_KEY=your_gemini_api_key_here
-MODEL_ID=gemini-2.0-flash
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen2.5:latest
 ```
 
 | Variable | Required | Default | Description |
 |----------|:--------:|---------|-------------|
-| `GEMINI_API_KEY` | ✅ | — | Google Gemini API key |
-| `MODEL_ID` | ❌ | `gemini-2.0-flash` | Gemini model identifier |
+| `OLLAMA_BASE_URL` | ❌ | `http://localhost:11434` | Ollama server URL |
+| `OLLAMA_MODEL` | ❌ | `qwen2.5:latest` | Ollama model tag |
 
 ### Local Development
 
@@ -110,9 +108,9 @@ source .venv/bin/activate
 # 4. Install dependencies
 pip install -r requirements.txt
 
-# 5. Create .env file with your API key
-echo GEMINI_API_KEY=your_key_here > .env
-echo MODEL_ID=gemini-2.0-flash >> .env
+# 5. Install and start Ollama, pull the model
+# See https://ollama.com for installation
+ollama pull qwen2.5:latest
 
 # 6. Start the server
 uvicorn app.main:app --reload --port 8000
@@ -123,13 +121,14 @@ The API is now available at **http://localhost:8000**.
 ### Docker
 
 ```bash
-# Option 1: Docker Compose (recommended)
+# Docker Compose (recommended — includes Ollama + model pull + API)
 docker compose up --build
-
-# Option 2: Docker standalone
-docker build -t receipt-ocr .
-docker run -p 8000:8000 -e GEMINI_API_KEY=your_key_here receipt-ocr
 ```
+
+This starts 3 services:
+1. **ollama** — LLM server on port `11434`
+2. **ollama-pull** — one-shot init container that pulls `qwen2.5:latest`
+3. **api** — FastAPI on port `8000` (waits for model to be ready)
 
 ---
 
@@ -144,7 +143,7 @@ POST /process_pdf
 | Parameter | Type | In | Default | Description |
 |-----------|------|-----|---------|-------------|
 | `file` | `UploadFile` | body (multipart) | *required* | PDF file to process |
-| `strategy` | `string` | query | `gemini` | Parsing strategy: `regex`, `llm`, `gemini`, `hybrid`, `native` |
+| `strategy` | `string` | query | `hybrid` | Parsing strategy: `regex`, `llm`, `gemini`, or `hybrid` |
 
 #### Response Schema
 
@@ -170,25 +169,26 @@ POST /process_pdf
 ### cURL Examples
 
 ```bash
-# Default strategy (gemini — multimodal image → JSON)
+# Default strategy (hybrid — pdfplumber + EasyOCR + Ollama)
 curl -X POST "http://localhost:8000/process_pdf" \
   -F "file=@receipt.pdf"
 
-# Hybrid strategy (pdfplumber + EasyOCR + Gemini)
-curl -X POST "http://localhost:8000/process_pdf?strategy=hybrid" \
+# Gemini strategy (EasyOCR + Ollama)
+curl -X POST "http://localhost:8000/process_pdf?strategy=gemini" \
   -F "file=@receipt.pdf"
 
-# Native PDF strategy (pdfplumber + Gemini, for digital PDFs)
-curl -X POST "http://localhost:8000/process_pdf?strategy=native" \
-  -F "file=@receipt.pdf"
-
-# LLM strategy (EasyOCR + Gemini text)
+# LLM strategy (EasyOCR + Ollama)
 curl -X POST "http://localhost:8000/process_pdf?strategy=llm" \
   -F "file=@receipt.pdf"
 
-# Regex strategy (no API key required)
+# Regex strategy (no LLM required)
 curl -X POST "http://localhost:8000/process_pdf?strategy=regex" \
   -F "file=@receipt.pdf"
+
+# Batch processing (multiple files)
+curl -X POST "http://localhost:8000/process_batch?strategy=hybrid" \
+  -F "files=@receipt1.pdf" \
+  -F "files=@receipt2.pdf"
 ```
 
 ### Swagger UI
@@ -238,9 +238,8 @@ Ground truth files are stored in `evaluation/ground_truth/` as JSON:
 python -m evaluation.evaluate --strategy all
 
 # Evaluate a specific strategy
-python -m evaluation.evaluate --strategy gemini
 python -m evaluation.evaluate --strategy hybrid
-python -m evaluation.evaluate --strategy native
+python -m evaluation.evaluate --strategy gemini
 python -m evaluation.evaluate --strategy llm
 python -m evaluation.evaluate --strategy regex
 
@@ -266,7 +265,7 @@ Output example:
 
 ```
 =======================================================
-  Strategy: GEMINI (10 receipts)
+  Strategy: HYBRID (10 receipts)
 =======================================================
   Field                      Avg Similarity
   ----------------------------------------
@@ -302,27 +301,27 @@ pytest tests/test_receipt_parser.py -v
 
 ```
 pdf_ocr/
-├── .env                          # Environment variables (GEMINI_API_KEY, MODEL_ID)
-├── Dockerfile                    # Container definition
-├── docker-compose.yaml           # Docker Compose configuration
+├── .env                          # Environment variables (OLLAMA_BASE_URL, OLLAMA_MODEL)
+├── Dockerfile                    # Multi-stage container definition
+├── docker-compose.yaml           # Docker Compose (API + Ollama + model pull)
 ├── requirements.txt              # Python dependencies
 ├── app/
 │   ├── main.py                   # FastAPI application entry point
 │   ├── routers/
-│   │   └── receipt.py            # POST /process_pdf endpoint
+│   │   └── receipt.py            # POST /process_pdf + /process_batch endpoints
 │   ├── schemas/
 │   │   └── receipt.py            # Pydantic response models
 │   └── services/
 │       ├── parser_factory.py     # Strategy enum & parser instantiation
-│       ├── gemini_parser.py      # Image → Gemini multimodal → JSON
-│       ├── llm_parser.py         # OCR text → Gemini text → JSON
-│       ├── hybrid_parser.py      # pdfplumber + EasyOCR → Gemini → JSON
-│       ├── native_parser.py      # pdfplumber → Gemini → JSON
-│       ├── receipt_parser.py     # Regex-based parser (no API)
+│       ├── ollama_client.py      # Shared Ollama client (chat_completion)
+│       ├── gemini_parser.py      # EasyOCR → Ollama → JSON
+│       ├── llm_parser.py         # OCR text → Ollama → JSON
+│       ├── hybrid_parser.py      # pdfplumber + EasyOCR → Ollama → JSON
+│       ├── receipt_parser.py     # Regex-based parser (no LLM)
 │       ├── ocr_engine.py         # EasyOCR wrapper with language support
 │       ├── pdf_converter.py      # PDF → PIL Images (PyMuPDF)
 │       ├── pdfplumber_extractor.py # PDF → text (pdfplumber)
-│       └── json_utils.py         # LLM JSON parsing & schema prompt
+│       └── json_utils.py         # JSON parsing, prompts & post-processing
 ├── evaluation/
 │   ├── evaluate.py               # Evaluation pipeline CLI
 │   ├── metrics.py                # Scoring functions (similarity, F1, etc.)
