@@ -1,93 +1,44 @@
-import logging
-from functools import lru_cache
+"""OCR engine facade — delegates to the backend selected by the OCR_BACKEND env var.
 
-import easyocr
-import numpy as np
-from PIL import Image
+Supported values for OCR_BACKEND:
+  easyocr    (default) — uses EasyOCR
+  paddleocr             — uses PaddleOCR (requires paddlepaddle + paddleocr installed)
+"""
+
+import logging
+import os
+
+from app.services.base_ocr import BaseOCRExtractor
+
+# Re-export for backward compatibility with any code that imports COUNTRY_TO_LANGS
+# directly from this module.
+from app.services.easyocr_tool import _EASYOCR_COUNTRY_TO_LANGS as COUNTRY_TO_LANGS
 
 logger = logging.getLogger(__name__)
 
-CYRILLIC_LANGS = {"ru", "rs_cyrillic", "be", "bg", "uk", "mn"}
-LATIN_LANGS = {
-    "en", "fr", "de", "es", "it", "pt", "nl", "pl", "cs", "ro", "hr",
-    "sk", "sl", "sq", "tr", "vi", "id", "ms", "tl", "sw", "af", "az",
-    "bs", "ca", "cy", "da", "et", "fi", "ga", "hu", "is", "la", "lt",
-    "lv", "mt", "no", "oc", "sv", "uz", "eu", "mi",
-}
 
-# Mapping from dataset country codes to EasyOCR language codes
-COUNTRY_TO_LANGS: dict[str, list[str]] = {
-    "de": ["de", "en"],
-    "at": ["de", "en"],
-    "us": ["en"],
-    "uk": ["en"],
-    "fr": ["fr", "en"],
-    "es": ["es", "en"],
-    "nl": ["nl", "en"],
-    "ca": ["en", "fr"],
-    "cn": ["ch_sim", "en"],
-    "hk": ["ch_tra", "en"],
-    "ee": ["et", "en"],
-    "lt": ["lt", "en"],
-    "se": ["sv", "en"],
-    "pl": ["pl", "en"],
-    "hr": ["hr", "en"],
-    "gr": ["en"],          # EasyOCR does not support Greek script well; fallback to English
-    "ir": ["en"],           # Ireland
-    "cz": ["cs", "en"],
-    "be": ["fr", "nl", "en"],
-}
-
-
-def _validate_lang_list(lang_list: list[str]) -> list[str]:
-    """
-    Validate and fix language list to avoid EasyOCR compatibility errors.
-    Cyrillic languages can only be combined with English.
-    """
-    has_cyrillic = any(lang in CYRILLIC_LANGS for lang in lang_list)
-    has_latin_non_en = any(
-        lang in LATIN_LANGS and lang != "en" for lang in lang_list
-    )
-
-    if has_cyrillic and has_latin_non_en:
-        filtered = [
-            lang for lang in lang_list if lang in CYRILLIC_LANGS or lang == "en"
-        ]
-        if not filtered:
-            filtered = ["en"]
-        logger.warning(
-            "Incompatible lang_list %s — filtered to %s (Cyrillic + English only)",
-            lang_list,
-            filtered,
-        )
-        return filtered
-
-    if "en" not in lang_list:
-        lang_list = [*lang_list, "en"]
-
-    return lang_list
-
-
-@lru_cache(maxsize=8)
-def _get_reader(lang_tuple: tuple[str, ...]) -> easyocr.Reader:
-    """Create and cache an EasyOCR Reader (keyed by language tuple)."""
-    logger.info("Initializing EasyOCR reader for languages: %s", lang_tuple)
-    return easyocr.Reader(list(lang_tuple), gpu=False)
-
-
-def _to_numpy(image) -> np.ndarray:
-    """Convert a single image to a numpy array compatible with EasyOCR."""
-    if isinstance(image, np.ndarray):
-        return image
-    if isinstance(image, Image.Image):
-        return np.array(image)
-    if isinstance(image, (str, bytes)):
-        # Already a format EasyOCR accepts natively
-        return image
+def _load_backend() -> BaseOCRExtractor:
+    backend = os.environ.get("OCR_BACKEND", "easyocr").lower().strip()
+    if backend == "easyocr":
+        from app.services.easyocr_tool import EasyOCRTool
+        logger.info("OCR backend: EasyOCR")
+        return EasyOCRTool()
+    if backend == "paddleocr":
+        from app.services.paddleocr_tool import PaddleOCRTool
+        logger.info("OCR backend: PaddleOCR")
+        return PaddleOCRTool()
+    if backend == "unstructured":
+        from app.services.unstructured_tool import UnstructuredTool
+        logger.info("OCR backend: Unstructured (Tesseract)")
+        return UnstructuredTool()
     raise ValueError(
-        f"Unsupported image type: {type(image)}. "
-        "Expected PIL.Image, numpy array, file path (str), or bytes."
+        f"Unknown OCR_BACKEND value: {backend!r}. "
+        "Supported values: 'easyocr', 'paddleocr', 'unstructured'."
     )
+
+
+# Module-level singleton — instantiated once on first import.
+_backend: BaseOCRExtractor = _load_backend()
 
 
 def extract_text(
@@ -97,35 +48,14 @@ def extract_text(
 ) -> str:
     """Run OCR on an image (or list of images) and return extracted text.
 
+    Delegates to the backend selected by the OCR_BACKEND environment variable
+    (default: 'easyocr'). Signature is identical to the original function.
+
     Args:
         image: PIL Image, numpy array, file path, bytes,
-            or a **list** of any of the above (multi-page PDF).
-        lang_list: Explicit EasyOCR language codes.
-        country_code: Dataset country code (e.g. "de", "fr") — used to
-            infer languages when *lang_list* is not provided.
+               or a list of any of the above (multi-page PDF).
+        lang_list: Backend-specific language codes.
+        country_code: Dataset country code (e.g. "de", "fr") used to
+                      infer languages when lang_list is not provided.
     """
-    if lang_list is None and country_code is not None:
-        lang_list = COUNTRY_TO_LANGS.get(country_code.lower(), ["en"])
-    if lang_list is None:
-        lang_list = ["en"]
-
-    lang_list = _validate_lang_list(lang_list)
-    lang_tuple = tuple(sorted(set(lang_list)))
-
-    reader = _get_reader(lang_tuple)
-
-    # Handle list of images (multi-page PDF)
-    if isinstance(image, list):
-        all_text_parts = []
-        for i, img in enumerate(image):
-            img_input = _to_numpy(img)
-            results = reader.readtext(img_input, detail=0)
-            page_text = "\n".join(results)
-            if page_text.strip():
-                all_text_parts.append(f"--- Page {i + 1} ---\n{page_text}")
-        return "\n\n".join(all_text_parts)
-
-    # Single image
-    img_input = _to_numpy(image)
-    results = reader.readtext(img_input, detail=0)
-    return "\n".join(results)
+    return _backend.extract_text(image, lang_list=lang_list, country_code=country_code)

@@ -92,15 +92,52 @@ def parse_json_response(response: str) -> ReceiptResponse:
     """Parse an LLM JSON output into a ReceiptResponse, with fallback."""
     try:
         json_str = response.strip()
+
+        # Strip closed <think>…</think> reasoning blocks (e.g. Qwen3 models)
+        json_str = re.sub(
+            r"<think>.*?</think>", "", json_str, flags=re.DOTALL
+        ).strip()
+
+        # Handle unclosed <think> blocks (truncated or missing </think>)
+        if "<think>" in json_str:
+            think_pos = json_str.index("<think>")
+            brace_pos = json_str.find("{", think_pos)
+            if brace_pos != -1:
+                json_str = json_str[brace_pos:]
+            else:
+                json_str = ""
+
+        # Strip markdown code fences
         if json_str.startswith("```"):
             json_str = json_str.split("```")[1]
             if json_str.startswith("json"):
                 json_str = json_str[4:]
+
+        # Locate the JSON object if there is leading text
+        if json_str and not json_str.lstrip().startswith("{"):
+            brace_start = json_str.find("{")
+            if brace_start != -1:
+                json_str = json_str[brace_start:]
+            else:
+                json_str = ""
+
+        # Strip trailing content after the last }
+        if json_str:
+            brace_end = json_str.rfind("}")
+            if brace_end != -1:
+                json_str = json_str[: brace_end + 1]
+
+        if not json_str.strip():
+            raise ValueError("No JSON content found in LLM response")
+
         data = json.loads(json_str)
         result = ReceiptResponse.model_validate(data)
         return postprocess(result)
     except (json.JSONDecodeError, Exception) as e:
-        logger.warning("LLM output could not be parsed: %s — raw: %s", e, response[:200])
+        logger.warning(
+            "LLM output could not be parsed: %s — raw: %s",
+            e, response[:500],
+        )
         return ReceiptResponse(
             ServiceProvider=ServiceProvider(Name="Unknown"),
             TransactionDetails=TransactionDetails(),
@@ -174,4 +211,5 @@ Important rules:
 - TotalAmount should be the final amount paid
 - VATNumber is the tax registration number of the business, NOT the VAT rate
 - VAT field contains the tax rate or amount details
-- Your response must start with { and end with } — nothing else."""
+- Your response must start with { and end with } — nothing else.
+- Do NOT include any reasoning, thinking, or <think> blocks. Output ONLY the JSON object."""

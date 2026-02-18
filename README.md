@@ -45,11 +45,13 @@ All LLM inference runs **locally** via Ollama (qwen2.5) — no cloud API needed.
 ```
 PDF Upload
     │
-    ├── [hybrid]  ──► pdfplumber (native text) + EasyOCR (image OCR) ──► Ollama (qwen2.5) ──► JSON
+    ├── [hybrid]  ──► pdfplumber (native text) + OCR (image OCR) ──► LLM ──► JSON
     │
-    ├── [llm]     ──► PyMuPDF (PDF → images) ──► EasyOCR ──► Ollama (qwen2.5) ──► JSON
+    ├── [llm]     ──► PyMuPDF (PDF → images) ──► OCR ──► LLM ──► JSON
     │
-    └── [regex]   ──► PyMuPDF (PDF → images) ──► EasyOCR ──► Regex heuristics ──► JSON
+    └── [regex]   ──► PyMuPDF (PDF → images) ──► OCR ──► Regex heuristics ──► JSON
+
+OCR backends: EasyOCR | PaddleOCR | Unstructured (Tesseract)
 ```
 
 ---
@@ -141,6 +143,8 @@ POST /process_pdf
 |-----------|------|-----|---------|-------------|
 | `file` | `UploadFile` | body (multipart) | *required* | PDF file to process |
 | `strategy` | `string` | query | `hybrid` | Parsing strategy: `regex`, `llm`, or `hybrid` |
+| `ocr_backend` | `string` | query | `easyocr` | OCR engine: `easyocr`, `paddleocr`, or `unstructured` |
+| `model` | `string` | query | `qwen/qwen3-32b` | LLM model for `llm`/`hybrid` strategies |
 
 #### Response Schema
 
@@ -176,6 +180,14 @@ curl -X POST "http://localhost:8000/process_pdf?strategy=llm" \
 
 # Regex strategy (no LLM required)
 curl -X POST "http://localhost:8000/process_pdf?strategy=regex" \
+  -F "file=@receipt.pdf"
+
+# Use Unstructured (Tesseract) OCR backend for multilingual scanned PDFs
+curl -X POST "http://localhost:8000/process_pdf?ocr_backend=unstructured&strategy=hybrid" \
+  -F "file=@receipt.pdf"
+
+# Use PaddleOCR backend
+curl -X POST "http://localhost:8000/process_pdf?ocr_backend=paddleocr&strategy=llm" \
   -F "file=@receipt.pdf"
 
 # Batch processing (multiple files)
@@ -234,6 +246,10 @@ python -m evaluation.evaluate --strategy all
 python -m evaluation.evaluate --strategy hybrid
 python -m evaluation.evaluate --strategy llm
 python -m evaluation.evaluate --strategy regex
+
+# Choose OCR backend
+python -m evaluation.evaluate --strategy hybrid --ocr-backend unstructured
+python -m evaluation.evaluate --strategy hybrid --ocr-backend paddleocr
 
 # Custom ground truth directory
 python -m evaluation.evaluate --strategy all --gt-dir path/to/ground_truth
@@ -304,11 +320,17 @@ pdf_ocr/
 │   │   └── receipt.py            # Pydantic response models
 │   └── services/
 │       ├── parser_factory.py     # Strategy enum & parser instantiation
-│       ├── ollama_client.py      # Shared Ollama client (chat_completion)
-│       ├── llm_parser.py         # OCR text → Ollama → JSON
-│       ├── hybrid_parser.py      # pdfplumber + EasyOCR → Ollama → JSON
+│       ├── base_ocr.py           # Abstract base class for OCR backends
+│       ├── base_llm.py           # Abstract base class for LLM backends
+│       ├── ocr_engine.py         # OCR facade — delegates to selected backend
+│       ├── easyocr_tool.py       # EasyOCR backend (18+ languages)
+│       ├── paddleocr_tool.py     # PaddleOCR backend
+│       ├── unstructured_tool.py  # Unstructured + Tesseract backend (multilingual OCR)
+│       ├── groq_client.py        # Groq Cloud LLM client (with Langfuse tracing)
+│       ├── ollama_client.py      # Legacy shim → delegates to Groq
+│       ├── llm_parser.py         # OCR text → LLM → JSON
+│       ├── hybrid_parser.py      # pdfplumber + OCR → LLM → JSON
 │       ├── receipt_parser.py     # Regex-based parser (no LLM)
-│       ├── ocr_engine.py         # EasyOCR wrapper with language support
 │       ├── pdf_converter.py      # PDF → PIL Images (PyMuPDF)
 │       ├── pdfplumber_extractor.py # PDF → text (pdfplumber)
 │       └── json_utils.py         # JSON parsing, prompts & post-processing

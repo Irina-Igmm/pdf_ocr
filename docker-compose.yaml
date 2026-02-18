@@ -1,42 +1,4 @@
-version: "3.9"
-
 services:
-  # ── Ollama LLM Server ──────────────────────────────────────────
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    # GPU support (uncomment if NVIDIA GPU available)
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-    restart: unless-stopped
-
-  # ── Model Puller (one-shot init container) ─────────────────────
-  ollama-pull:
-    image: ollama/ollama:latest
-    container_name: ollama-pull
-    depends_on:
-      ollama:
-        condition: service_healthy
-    entrypoint: ["ollama", "pull", "qwen2.5:latest"]
-    environment:
-      - OLLAMA_HOST=http://ollama:11434
-    restart: "no"
-
   # ── FastAPI Application ────────────────────────────────────────
   api:
     build:
@@ -45,14 +7,10 @@ services:
     container_name: receipt-ocr-api
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - OLLAMA_MODEL=qwen2.5:latest
-    depends_on:
-      ollama:
-        condition: service_healthy
-      ollama-pull:
-        condition: service_completed_successfully
+      - OCR_BACKEND=easyocr
     volumes:
       - ./data:/app/data:ro
     healthcheck:
@@ -62,6 +20,3 @@ services:
       retries: 3
       start_period: 60s
     restart: unless-stopped
-
-volumes:
-  ollama_data:

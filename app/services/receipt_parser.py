@@ -107,10 +107,30 @@ class RegexReceiptParser:
             "CHF": r"CHF",
             "CAD": r"CAD|CA\$",
             "CNY": r"CNY|¥|RMB",
+            "SEK": r"SEK|\bkr\b",
+            "CZK": r"CZK|Kč",
+            "PLN": r"PLN|zł",
         }
         for code, pattern in currency_map.items():
             if re.search(pattern, text):
                 return code
+
+        # Language-based heuristics: German keywords → EUR
+        if re.search(
+            r"\bMwSt\b|\bSumme\b|\bGesamt\b|\bBrutto\b|\bNetto\b"
+            r"|\bRechnung\b|\bSteuer(?:nummer)?\b|\bZahlung\b",
+            text,
+            re.IGNORECASE,
+        ):
+            return "EUR"
+
+        # French keywords → EUR
+        if re.search(
+            r"\bTVA\b|\bTTC\b|\b[Mm]ontant\b",
+            text,
+        ):
+            return "EUR"
+
         return None
 
     def _extract_vat(self, text: str) -> str | None:

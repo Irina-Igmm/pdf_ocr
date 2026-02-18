@@ -66,7 +66,7 @@ class TestProcessPdfEndpoint:
     @patch("app.routers.receipt.pdf_to_images", return_value=[])
     def test_no_text_extracted(self, mock_pdf, mock_ocr, client):
         response = client.post(
-            "/process_pdf",
+            "/process_pdf?strategy=llm",
             files={"file": ("test.pdf", b"%PDF-1.4 fake", "application/pdf")},
         )
         assert response.status_code == 422

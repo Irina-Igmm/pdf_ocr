@@ -34,7 +34,7 @@ table td {
 
 - Auteur : [Votre Nom]
 - Date : Février 2026
-- Stack : FastAPI · Ollama (qwen2.5) · EasyOCR · pdfplumber · Docker
+- Stack : FastAPI · Groq/Ollama · EasyOCR · PaddleOCR · Unstructured · pdfplumber · Docker
 
 ---
 
@@ -101,9 +101,11 @@ en format JSON normalisé.
 |-----------|------|
 | `FastAPI` | Framework web asynchrone |
 | `PyMuPDF (fitz)` | Conversion PDF → images PIL |
-| `EasyOCR` | OCR optique (18 langues) |
+| `EasyOCR` | OCR optique (18+ langues) |
+| `PaddleOCR` | OCR alternatif (modèle visual-language) |
+| `Unstructured + Tesseract` | OCR via `partition_pdf` — multilingue, idéal pour PDFs scannés |
 | `pdfplumber` | Extraction texte natif PDF |
-| `Ollama (qwen2.5:latest)` | LLM local — structuration JSON |
+| `Groq Cloud` | LLM — structuration JSON (qwen3-32b, gpt-oss-120b) |
 | `Docker + docker-compose` | Conteneurisation (API + Ollama) |
 
 ---
@@ -124,11 +126,10 @@ en format JSON normalisé.
 - **Docker-ready** — conteneur Ollama officiel avec support GPU
 - **Prompt engineeré** — few-shot avec 2 exemples + règles strictes
 
-### 3. Pourquoi EasyOCR ?
-- **18+ langues** supportées nativement
-- **Sans Tesseract** — pur Python, installation simple
-- **GPU optionnel** — fonctionne en CPU
-- **Cache LRU** — les readers sont mis en cache par combinaison de langues
+### 3. Pourquoi 3 backends OCR ?
+- **EasyOCR** — 18+ langues, pur Python, installation simple, GPU optionnel, cache LRU
+- **PaddleOCR** — modèle visual-language (PaddleOCRVL), performant sur les layouts complexes
+- **Unstructured + Tesseract** — `partition_pdf` avec OCR intégré, excellent pour les PDFs scannés multilingues, supporte 25+ pays via les packs de langue Tesseract
 
 ### 4. Pourquoi pdfplumber ?
 - **Extraction texte natif** — récupère le text layer sans OCR
@@ -147,15 +148,23 @@ en format JSON normalisé.
 
 | # | Stratégie | Pipeline | Cas d'usage |
 |---|-----------|----------|-------------|
-| 1 | **`hybrid`** ⭐ | PDF → pdfplumber + EasyOCR → Texte fusionné → Ollama | **Défaut** — PDFs mixtes (natif+scanné) |
-| 2 | **`llm`** | PDF → Images → EasyOCR → Texte → Ollama | Reçus scannés (image uniquement) |
-| 3 | **`regex`** | PDF → Images → EasyOCR → Texte → Regex | Rapide, sans LLM, précision limitée |
+| 1 | **`hybrid`** ⭐ | PDF → pdfplumber + OCR → Texte fusionné → LLM | **Défaut** — PDFs mixtes (natif+scanné) |
+| 2 | **`llm`** | PDF → Images → OCR → Texte → LLM | Reçus scannés (image uniquement) |
+| 3 | **`regex`** | PDF → Images → OCR → Texte → Regex | Rapide, sans LLM, précision limitée |
+
+### 3 backends OCR interchangeables
+| Backend | Technologie | Points forts |
+|---------|-------------|-------------|
+| **`easyocr`** (défaut) | EasyOCR | 18+ langues, pur Python, simple |
+| **`paddleocr`** | PaddleOCR VL | Modèle visual-language, layouts complexes |
+| **`unstructured`** | Unstructured + Tesseract | `partition_pdf` avec OCR, multilingue (25+ pays) |
 
 ### Quand utiliser quelle stratégie ?
 - **Cas général** → `hybrid` (défaut — combine texte natif + OCR)
 - **Reçu scanné (image)** → `llm` (OCR → LLM)
+- **PDF scanné multilingue** → `hybrid` + `ocr_backend=unstructured`
 - **Budget / hors-ligne** → `regex` (pas d'appel LLM)
-- **Benchmark** → comparer les 3 stratégies via l'évaluation
+- **Benchmark** → comparer les stratégies × backends via l'évaluation
 
 ---
 
@@ -192,21 +201,23 @@ en format JSON normalisé.
 
 ### 19 pays supportés
 
-| Région | Pays | Langues EasyOCR |
-|--------|------|-----------------|
-| Europe DACH | DE, AT | `de`, `en` |
-| Europe Ouest | FR, ES, NL, BE | `fr`, `es`, `nl`, `en` |
-| Europe Nord | SE, EE, LT | `sv`, `et`, `lt`, `en` |
-| Europe Est | PL, HR, CZ | `pl`, `hr`, `cs`, `en` |
-| Îles Britanniques | UK, IR | `en` |
-| Asie | CN, HK | `ch_sim`, `ch_tra`, `en` |
-| Amérique | US, CA | `en`, `fr` |
-| Méditerranée | GR | `en` (fallback) |
+| Région | Pays | Langues EasyOCR | Langues Tesseract (Unstructured) |
+|--------|------|-----------------|----------------------------------|
+| Europe DACH | DE, AT | `de`, `en` | `deu`, `eng` |
+| Europe Ouest | FR, ES, NL, BE, IT, PT | `fr`, `es`, `nl`, `en` | `fra`, `spa`, `nld`, `ita`, `por`, `eng` |
+| Europe Nord | SE, EE, LT | `sv`, `et`, `lt`, `en` | `swe`, `est`, `lit`, `eng` |
+| Europe Est | PL, HR, CZ, RO, HU, BG | `pl`, `hr`, `cs`, `en` | `pol`, `hrv`, `ces`, `ron`, `hun`, `bul`, `eng` |
+| Îles Britanniques | UK, IR | `en` | `eng` |
+| Asie | CN, HK | `ch_sim`, `ch_tra`, `en` | `chi_sim`, `chi_tra`, `eng` |
+| Amérique | US, CA | `en`, `fr` | `eng`, `fra` |
+| Méditerranée | GR, TR | `en` (fallback) | `ell`, `tur`, `eng` |
+| Europe Est (Cyrillique) | RU | — | `rus`, `eng` |
 
 ### Validation des langues
-- Vérification de compatibilité Cyrillique/Latin
+- Vérification de compatibilité Cyrillique/Latin (EasyOCR)
 - Fallback automatique en anglais
 - Cache LRU par combinaison de langues (`maxsize=8`)
+- **Unstructured** : mapping `country_code` → codes Tesseract (25+ pays)
 
 ---
 
@@ -271,10 +282,11 @@ python -m evaluation.evaluate --strategy all
 - **Validation robuste** — Pydantic, fallback gracieux
 
 ### ⚠️ Limitations
-- **Ressources GPU** — qwen2.5 bénéficie d'un GPU pour la latence
+- **Ressources GPU** — les modèles OCR/LLM bénéficient d'un GPU pour la latence
 - **Reçus non standardisés** — formats très variés entre pays/enseignes
 - **OCR bruyant** — EasyOCR peut mal lire les reçus froissés/flous
-- **Pas de multimodal** — qwen2.5 est text-only (pas de vision directe sur images)
+- **Unstructured** — nécessite Tesseract installé avec les packs de langues sur le système
+- **Pas de multimodal** — pipeline text-only (pas de vision directe sur images)
 - **Pas de fine-tuning** — le prompt engineering a ses limites
 
 ---

@@ -19,10 +19,14 @@ def extract_text_pdfplumber(pdf_input) -> str:
     if isinstance(pdf_input, bytes):
         pdf_input = io.BytesIO(pdf_input)
 
-    with pdfplumber.open(pdf_input) as pdf:
-        pages_text = []
-        for i, page in enumerate(pdf.pages):
-            text = page.extract_text() or ""
-            if text.strip():
-                pages_text.append(f"--- Page {i + 1} ---\n{text}")
-        return "\n\n".join(pages_text)
+    try:
+        with pdfplumber.open(pdf_input) as pdf:
+            pages_text = []
+            for i, page in enumerate(pdf.pages):
+                text = page.extract_text() or ""
+                if text.strip():
+                    pages_text.append(f"--- Page {i + 1} ---\n{text}")
+            return "\n\n".join(pages_text)
+    except Exception as e:
+        logger.warning("pdfplumber failed to parse PDF: %s", e)
+        return ""
