@@ -6,7 +6,27 @@ with built-in OCR support and multilanguage handling via Tesseract.
 
 import logging
 import tempfile
+import os
+import shutil
 from typing import Union
+
+# Configure Tesseract on Windows for unstructured
+if os.name == "nt":
+    # Common default install paths
+    possible_paths = [
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+        r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+        os.environ.get("TESSERACT_CMD", ""),
+    ]
+    for path in possible_paths:
+        if path and os.path.exists(path):
+            try:
+                import unstructured_pytesseract
+                unstructured_pytesseract.pytesseract.tesseract_cmd = path
+                break
+            except ImportError:
+                pass
+
 
 from app.services.base_ocr import BaseOCRExtractor, ImageInput
 

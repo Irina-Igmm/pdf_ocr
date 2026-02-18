@@ -56,7 +56,7 @@ def _to_numpy(image) -> np.ndarray:
 def _get_reader(lang: str):
     """Create and cache a PaddleOCR instance (keyed by language)."""
     try:
-        from paddleocr import PaddleOCRVL
+        from paddleocr import PaddleOCR
     except ImportError as exc:
         raise RuntimeError(
             "PaddleOCR is not installed. "
@@ -64,7 +64,13 @@ def _get_reader(lang: str):
         ) from exc
     logger.info("Initializing PaddleOCR reader for language: %s", lang)
 
-    return PaddleOCRVL()
+    return PaddleOCR(
+        use_doc_orientation_classify=False,
+        use_doc_unwarping=False,
+        use_textline_orientation=False,
+        enable_mkldnn=False
+    )
+
 
 def _ocr_single(reader, image) -> str:
     """Run PaddleOCR on a single image and return extracted text."""

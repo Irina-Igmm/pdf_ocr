@@ -1,6 +1,6 @@
 # Receipt OCR API
 
-API-based OCR system for extracting structured information from scanned PDF receipts, built with **FastAPI** and powered by **Ollama (qwen2.5)**.
+API-based OCR system for extracting structured information from scanned PDF receipts, built with **FastAPI** and powered by **Groq Cloud** (qwen3-32b / gpt-oss-120b).
 
 ---
 
@@ -36,7 +36,7 @@ This system provides REST endpoints (`POST /process_pdf` and `POST /process_batc
 - **Transaction Details**: Items list (name, quantity, price), Currency, Total Amount, VAT
 
 Three parsing strategies are available, allowing comparison between different pipelines.
-All LLM inference runs **locally** via Ollama (qwen2.5) — no cloud API needed.
+LLM inference runs via **Groq Cloud** (ultra-fast LPU) with model selection at request time.
 
 ---
 
@@ -45,13 +45,14 @@ All LLM inference runs **locally** via Ollama (qwen2.5) — no cloud API needed.
 ```
 PDF Upload
     │
-    ├── [hybrid]  ──► pdfplumber (native text) + OCR (image OCR) ──► LLM ──► JSON
+    ├── [hybrid]  ──► pdfplumber (native text) + OCR (image OCR) ──► Groq LLM ──► JSON
     │
-    ├── [llm]     ──► PyMuPDF (PDF → images) ──► OCR ──► LLM ──► JSON
+    ├── [llm]     ──► PyMuPDF (PDF → images) ──► OCR ──► Groq LLM ──► JSON
     │
     └── [regex]   ──► PyMuPDF (PDF → images) ──► OCR ──► Regex heuristics ──► JSON
 
 OCR backends: EasyOCR | PaddleOCR | Unstructured (Tesseract)
+LLM models:   qwen/qwen3-32b | openai/gpt-oss-120b (via Groq Cloud)
 ```
 
 ---
@@ -60,9 +61,9 @@ OCR backends: EasyOCR | PaddleOCR | Unstructured (Tesseract)
 
 | Strategy | Pipeline | Best For | Requires LLM |
 |----------|----------|----------|:------------:|
-| **`hybrid`** (default) | pdfplumber + EasyOCR → merged text → Ollama | Mixed PDFs (native + scanned), best accuracy | ✅ |
-| **`llm`** | EasyOCR → text → Ollama | Scanned-only PDFs, OCR + LLM pipeline | ✅ |
-| **`regex`** | EasyOCR → text → regex | Fast, no LLM needed, limited accuracy | ❌ |
+| **`hybrid`** (default) | pdfplumber + OCR → merged text → Groq LLM | Mixed PDFs (native + scanned), best accuracy | ✅ |
+| **`llm`** | OCR → text → Groq LLM | Scanned-only PDFs, OCR + LLM pipeline | ✅ |
+| **`regex`** | OCR → text → regex | Fast, no LLM needed, limited accuracy | ❌ |
 
 ---
 
@@ -71,22 +72,36 @@ OCR backends: EasyOCR | PaddleOCR | Unstructured (Tesseract)
 ### Prerequisites
 
 - **Python 3.12+**
-- **Ollama** — install from [ollama.com](https://ollama.com) and pull the model: `ollama pull qwen2.5:latest`
-- **Docker** (optional, for containerized deployment — Ollama included in docker-compose)
+- **Groq Cloud API key** — sign up at [console.groq.com](https://console.groq.com) to get a free API key
+- **Docker** (optional, for containerized deployment)
 
 ### Environment Variables
 
 Create a `.env` file at the project root:
 
 ```env
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=qwen2.5:latest
+# Groq Cloud API
+GROQ_API_KEY=gsk_your_api_key_here
+
+# OCR backend: easyocr (default), paddleocr, or unstructured
+OCR_BACKEND=easyocr
+
+# Langfuse tracing (optional)
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_BASE_URL=https://cloud.langfuse.com
+
+# Protobuf config
+PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 ```
 
 | Variable | Required | Default | Description |
 |----------|:--------:|---------|-------------|
-| `OLLAMA_BASE_URL` | ❌ | `http://localhost:11434` | Ollama server URL |
-| `OLLAMA_MODEL` | ❌ | `qwen2.5:latest` | Ollama model tag |
+| `GROQ_API_KEY` | ✅ | — | Groq Cloud API key |
+| `OCR_BACKEND` | ❌ | `easyocr` | OCR engine: `easyocr`, `paddleocr`, `unstructured` |
+| `LANGFUSE_SECRET_KEY` | ❌ | — | Langfuse secret key (LLM tracing) |
+| `LANGFUSE_PUBLIC_KEY` | ❌ | — | Langfuse public key |
+| `LANGFUSE_BASE_URL` | ❌ | `https://cloud.langfuse.com` | Langfuse server URL |
 
 ### Local Development
 
@@ -107,9 +122,8 @@ source .venv/bin/activate
 # 4. Install dependencies
 pip install -r requirements.txt
 
-# 5. Install and start Ollama, pull the model
-# See https://ollama.com for installation
-ollama pull qwen2.5:latest
+# 5. Configure your Groq API key in .env
+# See https://console.groq.com for a free key
 
 # 6. Start the server
 uvicorn app.main:app --reload --port 8000
@@ -120,14 +134,12 @@ The API is now available at **http://localhost:8000**.
 ### Docker
 
 ```bash
-# Docker Compose (recommended — includes Ollama + model pull + API)
+# Docker Compose (recommended)
 docker compose up --build
 ```
 
-This starts 3 services:
-1. **ollama** — LLM server on port `11434`
-2. **ollama-pull** — one-shot init container that pulls `qwen2.5:latest`
-3. **api** — FastAPI on port `8000` (waits for model to be ready)
+This starts the **Receipt OCR API** container on port `8000`.
+LLM inference is handled remotely by Groq Cloud — no local GPU required.
 
 ---
 
@@ -170,11 +182,11 @@ POST /process_pdf
 ### cURL Examples
 
 ```bash
-# Default strategy (hybrid — pdfplumber + EasyOCR + Ollama)
+# Default strategy (hybrid — pdfplumber + EasyOCR + Groq LLM)
 curl -X POST "http://localhost:8000/process_pdf" \
   -F "file=@receipt.pdf"
 
-# LLM strategy (EasyOCR + Ollama)
+# LLM strategy (EasyOCR + Groq LLM)
 curl -X POST "http://localhost:8000/process_pdf?strategy=llm" \
   -F "file=@receipt.pdf"
 
@@ -251,6 +263,9 @@ python -m evaluation.evaluate --strategy regex
 python -m evaluation.evaluate --strategy hybrid --ocr-backend unstructured
 python -m evaluation.evaluate --strategy hybrid --ocr-backend paddleocr
 
+# Choose LLM model
+python -m evaluation.evaluate --strategy hybrid --model openai/gpt-oss-120b
+
 # Custom ground truth directory
 python -m evaluation.evaluate --strategy all --gt-dir path/to/ground_truth
 ```
@@ -308,9 +323,9 @@ pytest tests/test_receipt_parser.py -v
 
 ```
 pdf_ocr/
-├── .env                          # Environment variables (OLLAMA_BASE_URL, OLLAMA_MODEL)
+├── .env                          # Environment variables (GROQ_API_KEY, LANGFUSE_*, OCR_BACKEND)
 ├── Dockerfile                    # Multi-stage container definition
-├── docker-compose.yaml           # Docker Compose (API + Ollama + model pull)
+├── docker-compose.yaml           # Docker Compose (API service)
 ├── requirements.txt              # Python dependencies
 ├── app/
 │   ├── main.py                   # FastAPI application entry point

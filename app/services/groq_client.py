@@ -80,6 +80,11 @@ class GroqLLMClient(BaseLLMClient):
                 },
             )
 
+        # reasoning_effort is only supported by qwen models on Groq
+        extra_params = {}
+        if "qwen" in self._model.lower():
+            extra_params["reasoning_effort"] = "none"
+
         completion = client.chat.completions.create(
             model=self._model,
             messages=messages,
@@ -87,7 +92,7 @@ class GroqLLMClient(BaseLLMClient):
             max_completion_tokens=8192,
             top_p=1,
             stop=None,
-            reasoning_effort="none"
+            **extra_params,
         )
 
         text: str = completion.choices[0].message.content or ""
