@@ -4,9 +4,7 @@ Evaluation pipeline for comparing receipt parsing strategies.
 Usage:
     python -m evaluation.evaluate --strategy regex
     python -m evaluation.evaluate --strategy llm
-    python -m evaluation.evaluate --strategy gemini
     python -m evaluation.evaluate --strategy hybrid
-    python -m evaluation.evaluate --strategy native
     python -m evaluation.evaluate --strategy all
 """
 
@@ -17,7 +15,6 @@ from pathlib import Path
 
 from app.services.ocr_engine import extract_text
 from app.services.parser_factory import (
-    IMAGE_STRATEGIES,
     PDF_BYTES_STRATEGIES,
     ParsingStrategy,
     get_parser,
@@ -37,7 +34,6 @@ def evaluate_strategy(
     strategy: ParsingStrategy, labels: list[dict]
 ) -> list[dict]:
     parser = get_parser(strategy)
-    is_image_strategy = strategy in IMAGE_STRATEGIES
     is_pdf_bytes_strategy = strategy in PDF_BYTES_STRATEGIES
     results = []
 
@@ -53,9 +49,6 @@ def evaluate_strategy(
 
         if is_pdf_bytes_strategy:
             prediction = parser.parse(pdf_bytes)
-        elif is_image_strategy:
-            images = pdf_to_images(pdf_bytes)
-            prediction = parser.parse(images)
         else:
             images = pdf_to_images(pdf_bytes)
             raw_text = extract_text(images)
@@ -119,7 +112,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--strategy",
-        choices=["regex", "llm", "gemini", "hybrid", "native", "all"],
+        choices=["regex", "llm", "hybrid", "all"],
         default="all",
     )
     parser.add_argument(

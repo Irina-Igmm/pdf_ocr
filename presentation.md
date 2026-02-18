@@ -143,20 +143,19 @@ en format JSON normalisé.
 
 ---
 
-## V — Les 4 Stratégies de Parsing
+## V — Les 3 Stratégies de Parsing
 
 | # | Stratégie | Pipeline | Cas d'usage |
 |---|-----------|----------|-------------|
-| 1 | **`gemini`** | PDF → Images → EasyOCR → Texte → Ollama | Reçus scannés, interface legacy |
-| 2 | **`llm`** | PDF → Images → EasyOCR → Texte → Ollama | Comparaison OCR+LLM |
-| 3 | **`hybrid`** ⭐ | PDF → pdfplumber + EasyOCR → Texte fusionné → Ollama | **Défaut** — PDFs mixtes (natif+scanné) |
-| 4 | **`regex`** | PDF → Images → EasyOCR → Texte → Regex | Rapide, sans LLM, précision limitée |
+| 1 | **`hybrid`** ⭐ | PDF → pdfplumber + EasyOCR → Texte fusionné → Ollama | **Défaut** — PDFs mixtes (natif+scanné) |
+| 2 | **`llm`** | PDF → Images → EasyOCR → Texte → Ollama | Reçus scannés (image uniquement) |
+| 3 | **`regex`** | PDF → Images → EasyOCR → Texte → Regex | Rapide, sans LLM, précision limitée |
 
 ### Quand utiliser quelle stratégie ?
 - **Cas général** → `hybrid` (défaut — combine texte natif + OCR)
-- **Reçu scanné (image)** → `gemini` ou `llm` (OCR → LLM)
+- **Reçu scanné (image)** → `llm` (OCR → LLM)
 - **Budget / hors-ligne** → `regex` (pas d'appel LLM)
-- **Benchmark** → comparer les 4 stratégies via l'évaluation
+- **Benchmark** → comparer les 3 stratégies via l'évaluation
 
 ---
 
@@ -239,21 +238,21 @@ python -m evaluation.evaluate --strategy all
 
 ## IX — Résultats d'Évaluation (Exemple)
 
-| Métrique | Hybrid ⭐ | Gemini | LLM | Regex |
-|----------|:--------:|:------:|:---:|:-----:|
-| Provider Name | **92%** | 90% | 88% | 60% |
-| Provider Address | **85%** | 82% | 80% | 35% |
-| VAT Number | **80%** | 78% | 75% | 40% |
-| Currency | **92%** | 90% | 90% | 70% |
-| Total Amount | **88%** | 85% | 82% | 55% |
-| Items F1 | **80%** | 78% | 72% | 30% |
-| Latence moy. | 5.1s | 4.8s | 4.2s | 0.3s |
+| Métrique | Hybrid ⭐ | LLM | Regex |
+|----------|:--------:|:---:|:-----:|
+| Provider Name | **92%** | 88% | 60% |
+| Provider Address | **85%** | 80% | 35% |
+| VAT Number | **80%** | 75% | 40% |
+| Currency | **92%** | 90% | 70% |
+| Total Amount | **88%** | 82% | 55% |
+| Items F1 | **80%** | 72% | 30% |
+| Latence moy. | 5.1s | 4.2s | 0.3s |
 
 > *Valeurs indicatives — exécuter `evaluate.py` pour les résultats réels.*
 
 ### Observations
 - **Hybrid** domine → la fusion pdfplumber + EasyOCR donne le meilleur texte au LLM
-- **Gemini / LLM** sont proches → même LLM (qwen2.5), différence = source de texte
+- **LLM** est légèrement en retrait → uniquement EasyOCR comme source de texte
 - **Regex** est très rapide mais fragile (formats non standardisés)
 - **Ollama local** : latence comparable à une API cloud, mais 100% privé
 

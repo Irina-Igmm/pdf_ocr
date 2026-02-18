@@ -3,7 +3,6 @@ from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from app.schemas.receipt import BatchReceiptResponse, BatchReceiptResult, ReceiptResponse
 from app.services.ocr_engine import extract_text
 from app.services.parser_factory import (
-    IMAGE_STRATEGIES,
     PDF_BYTES_STRATEGIES,
     ParsingStrategy,
     get_parser,
@@ -29,8 +28,8 @@ async def process_pdf(
     strategy: ParsingStrategy = Query(
         default=ParsingStrategy.HYBRID,
         description=(
-            "Parsing strategy: 'regex', 'llm', 'gemini', or 'hybrid'. "
-            "'hybrid' uses pdfplumber + EasyOCR + Ollama."
+            "Parsing strategy: 'regex', 'llm', or 'hybrid'. "
+            "'hybrid' (default) uses pdfplumber + EasyOCR + Ollama."
         ),
     ),
 ) -> ReceiptResponse:
@@ -48,10 +47,6 @@ async def process_pdf(
         return parser.parse(pdf_bytes)
 
     images = pdf_to_images(pdf_bytes)
-
-    # Strategies that work directly on images (Gemini multimodal)
-    if strategy in IMAGE_STRATEGIES:
-        return parser.parse(images)
 
     # Text-based strategies (regex, llm) — need EasyOCR first
     raw_text = extract_text(images)
@@ -75,7 +70,7 @@ async def process_batch(
         default=ParsingStrategy.HYBRID,
         description=(
             "Parsing strategy applied to all files: "
-            "'regex', 'llm', 'gemini', or 'hybrid'."
+            "'regex', 'llm', or 'hybrid'."
         ),
     ),
 ) -> BatchReceiptResponse:
@@ -108,9 +103,6 @@ async def process_batch(
             # Process based on strategy type
             if strategy in PDF_BYTES_STRATEGIES:
                 receipt = parser.parse(pdf_bytes)
-            elif strategy in IMAGE_STRATEGIES:
-                images = pdf_to_images(pdf_bytes)
-                receipt = parser.parse(images)
             else:
                 images = pdf_to_images(pdf_bytes)
                 raw_text = extract_text(images)

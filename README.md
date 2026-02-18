@@ -35,7 +35,7 @@ This system provides REST endpoints (`POST /process_pdf` and `POST /process_batc
 - **Service Provider**: Name, Address, VAT Number
 - **Transaction Details**: Items list (name, quantity, price), Currency, Total Amount, VAT
 
-Four parsing strategies are available, allowing comparison between different pipelines.
+Three parsing strategies are available, allowing comparison between different pipelines.
 All LLM inference runs **locally** via Ollama (qwen2.5) — no cloud API needed.
 
 ---
@@ -45,13 +45,11 @@ All LLM inference runs **locally** via Ollama (qwen2.5) — no cloud API needed.
 ```
 PDF Upload
     │
-    ├── [gemini]  ──► PyMuPDF (PDF → images) ──► EasyOCR ──► Ollama (qwen2.5) ──► JSON
+    ├── [hybrid]  ──► pdfplumber (native text) + EasyOCR (image OCR) ──► Ollama (qwen2.5) ──► JSON
     │
     ├── [llm]     ──► PyMuPDF (PDF → images) ──► EasyOCR ──► Ollama (qwen2.5) ──► JSON
     │
-    ├── [hybrid]  ──► pdfplumber (native text) + EasyOCR (image OCR) ──► Ollama (qwen2.5) ──► JSON
-    │
-    └── [regex]   ──► PyMuPZ (PDF → images) ──► EasyOCR ──► Regex heuristics ──► JSON
+    └── [regex]   ──► PyMuPDF (PDF → images) ──► EasyOCR ──► Regex heuristics ──► JSON
 ```
 
 ---
@@ -61,8 +59,7 @@ PDF Upload
 | Strategy | Pipeline | Best For | Requires LLM |
 |----------|----------|----------|:------------:|
 | **`hybrid`** (default) | pdfplumber + EasyOCR → merged text → Ollama | Mixed PDFs (native + scanned), best accuracy | ✅ |
-| **`gemini`** | EasyOCR → text → Ollama | Scanned receipts (legacy name) | ✅ |
-| **`llm`** | EasyOCR → text → Ollama | Comparing OCR+LLM pipelines | ✅ |
+| **`llm`** | EasyOCR → text → Ollama | Scanned-only PDFs, OCR + LLM pipeline | ✅ |
 | **`regex`** | EasyOCR → text → regex | Fast, no LLM needed, limited accuracy | ❌ |
 
 ---
@@ -143,7 +140,7 @@ POST /process_pdf
 | Parameter | Type | In | Default | Description |
 |-----------|------|-----|---------|-------------|
 | `file` | `UploadFile` | body (multipart) | *required* | PDF file to process |
-| `strategy` | `string` | query | `hybrid` | Parsing strategy: `regex`, `llm`, `gemini`, or `hybrid` |
+| `strategy` | `string` | query | `hybrid` | Parsing strategy: `regex`, `llm`, or `hybrid` |
 
 #### Response Schema
 
@@ -171,10 +168,6 @@ POST /process_pdf
 ```bash
 # Default strategy (hybrid — pdfplumber + EasyOCR + Ollama)
 curl -X POST "http://localhost:8000/process_pdf" \
-  -F "file=@receipt.pdf"
-
-# Gemini strategy (EasyOCR + Ollama)
-curl -X POST "http://localhost:8000/process_pdf?strategy=gemini" \
   -F "file=@receipt.pdf"
 
 # LLM strategy (EasyOCR + Ollama)
@@ -239,7 +232,6 @@ python -m evaluation.evaluate --strategy all
 
 # Evaluate a specific strategy
 python -m evaluation.evaluate --strategy hybrid
-python -m evaluation.evaluate --strategy gemini
 python -m evaluation.evaluate --strategy llm
 python -m evaluation.evaluate --strategy regex
 
@@ -290,7 +282,6 @@ pytest tests/ -v
 
 # Run a specific test file
 pytest tests/test_router.py -v
-pytest tests/test_gemini_parser.py -v
 pytest tests/test_llm_parser.py -v
 pytest tests/test_receipt_parser.py -v
 ```
@@ -314,7 +305,6 @@ pdf_ocr/
 │   └── services/
 │       ├── parser_factory.py     # Strategy enum & parser instantiation
 │       ├── ollama_client.py      # Shared Ollama client (chat_completion)
-│       ├── gemini_parser.py      # EasyOCR → Ollama → JSON
 │       ├── llm_parser.py         # OCR text → Ollama → JSON
 │       ├── hybrid_parser.py      # pdfplumber + EasyOCR → Ollama → JSON
 │       ├── receipt_parser.py     # Regex-based parser (no LLM)
